@@ -117,7 +117,7 @@ Output ONLY the final description text. No preamble, no explanation.
 # ---------------------------------------------------------------------------
 
 def generate_descriptions(
-    app_info: AppInfo | dict[str, Any],
+    app_info: "AppInfo | dict[str, Any]",
     elements: list[Element],
     max_chars: int = 4000,
     model: str = "claude-opus-4-6",
@@ -170,57 +170,108 @@ def generate_descriptions(
 
 
 # ---------------------------------------------------------------------------
-# CLI 데모
+# 기본 요소 목록
+# ---------------------------------------------------------------------------
+
+DEFAULT_ELEMENTS = [
+    ("authority",  "개발사 신뢰도, 수상 이력, 다운로드 수 등 권위 확립"),
+    ("pain_point", "타겟 사용자가 겪는 핵심 문제"),
+    ("solution",   "앱이 그 문제를 해결하는 방식"),
+    ("features",   "주요 기능 목록"),
+    ("cta",        "다운로드 유도 문구"),
+]
+
+
+# ---------------------------------------------------------------------------
+# 인터랙티브 입력
+# ---------------------------------------------------------------------------
+
+def ask(prompt: str, default: str = "") -> str:
+    hint = f" [{default}]" if default else ""
+    value = input(f"{prompt}{hint}: ").strip()
+    return value if value else default
+
+
+def collect_app_info() -> AppInfo:
+    print("\n" + "="*60)
+    print("  앱 정보를 입력해 주세요")
+    print("="*60 + "\n")
+
+    name = ask("앱 이름")
+    category = ask("카테고리 (예: Productivity, Health, Finance)")
+    target_audience = ask("타겟 사용자 (예: 직장인, 학생, 부모)")
+    core_feature = ask("핵심 기능 한 줄 설명")
+    additional_context = ask("추가 정보 (수상 이력, 다운로드 수 등, 없으면 Enter)", default="")
+
+    return AppInfo(
+        name=name,
+        category=category,
+        target_audience=target_audience,
+        core_feature=core_feature,
+        additional_context=additional_context,
+    )
+
+
+def collect_elements() -> list[Element]:
+    print("\n" + "="*60)
+    print("  포함할 요소를 설정해 주세요")
+    print("  (Enter = 기본값 사용, 0 입력 = 해당 요소 제외)")
+    print("="*60 + "\n")
+
+    elements = []
+    for name, desc in DEFAULT_ELEMENTS:
+        print(f"[{name.upper()}] {desc}")
+        sentences_input = ask("  문장 수", default="2")
+        if sentences_input == "0":
+            print("  → 제외됨\n")
+            continue
+        try:
+            sentences = int(sentences_input)
+        except ValueError:
+            sentences = 2
+
+        fmt = "paragraph"
+        if name == "features":
+            fmt_input = ask("  형식 (1=bullet, 2=paragraph)", default="1")
+            fmt = "bullet" if fmt_input != "2" else "paragraph"
+
+        elements.append(Element(name=name, description=desc, sentences=sentences, format=fmt))
+        print()
+
+    return elements
+
+
+def collect_max_chars() -> int:
+    print("="*60)
+    val = ask("최대 글자 수 (App Store 최대 4000)", default="4000")
+    try:
+        return int(val)
+    except ValueError:
+        return 4000
+
+
+# ---------------------------------------------------------------------------
+# CLI 메인
 # ---------------------------------------------------------------------------
 
 def main():
-    # ── 앱 정보 ──────────────────────────────────────────────────────────
-    app = AppInfo(
-        name="FocusFlow",
-        category="Productivity",
-        target_audience="Professionals and students who struggle with distractions",
-        core_feature="AI-powered focus timer combined with habit tracking and smart break reminders",
-        additional_context="Won 'Best Productivity App 2024' by AppAdvice. Over 500,000 downloads.",
-    )
+    print("\n🍎 App Store Description Generator")
 
-    # ── 포함할 요소 및 분량 지정 ─────────────────────────────────────────
-    elements = [
-        Element(
-            name="authority",
-            description="Establish credibility — mention award or user base",
-            sentences=2,
-        ),
-        Element(
-            name="pain_point",
-            description="Describe the core problem the target audience faces daily",
-            sentences=3,
-        ),
-        Element(
-            name="solution",
-            description="Explain how the app solves that problem uniquely",
-            sentences=4,
-        ),
-        Element(
-            name="features",
-            description="List the top 5 key features",
-            sentences=5,
-            format="bullet",
-        ),
-        Element(
-            name="cta",
-            description="Strong call-to-action encouraging download",
-            sentences=1,
-        ),
-    ]
+    app = collect_app_info()
+    elements = collect_elements()
 
-    # ── 생성 ─────────────────────────────────────────────────────────────
+    if not elements:
+        print("요소를 하나 이상 선택해 주세요.")
+        return
+
+    max_chars = collect_max_chars()
+
     descriptions = generate_descriptions(
         app_info=app,
         elements=elements,
-        max_chars=4000,
+        max_chars=max_chars,
     )
 
-    # ── 결과 저장 (선택) ─────────────────────────────────────────────────
     output_path = "descriptions_output.txt"
     with open(output_path, "w", encoding="utf-8") as f:
         f.write("=== ENGLISH ===\n\n")
